@@ -1,7 +1,385 @@
-.DS_Store
-applet
-application.linux32
-application.linux64
-application.windows32
-application.windows64
-application.macosx
+#include "EasyVR.h" EasyVRBridge bridge; void setup()
+{
+cli();
+bridge.loop(0, 1, 12, 13);
+}
+
+void loop()
+{
+}
+ 
+
+
+Anexo X – Codificação do código Normal Mode
+
+#include "NewSoftSerial.h"
+#include "protocol.h"
+#include "EasyVR.h"
+
+
+
+#define som_ajustefinalizado 1
+#define som_camaativada	2
+#define som_camadesativada	3
+#define som_configuracoesefetuadas 4
+#define som_dorsobaixando  5
+#define som_dorsolevantando	6
+#define som_dorsoselecionado	7
+#define som_inicializandoconfiguracoes 8
+#define som_pernabaixando	9
+#define som_pernalevantando 10
+#define som_pernaselecionada 11
+#define som_qualacaorealizar 12
+#define som_qualregiaoajustar 13
+
+#define RXPIN 12
+#define TXPIN 13
+NewSoftSerial VRserial(RXPIN, TXPIN); EasyVR easyvr(VRserial);
+
+
+
+byte VRbot_receivePin; byte VRbot_transmitPin; long VRbot_baudRate; int VRbot_bitPeriod;
+
+int StatusCama = 0; //se 1 cama ativada se 0 cama desativada int StatusAjuste = 0; //se 1 cama ativada se 0 cama desativada int StatusRegiao = 0; //se 1 cama ativada se 0 cama desativada int StatusSensorA0; //SENSOR DE MINIMO PERNAS
+int StatusSensorA1; //SENSOR DE MAXIMO PERNAS int StatusSensorA2; //SENSOR DE MINIMO DORSO int StatusSensorA3; //SENSOR DE MAXIMO DORSO int verificaPeloSensor;
+
+int somRegiao = 0;
+int somAcao = 0;
+
+void setup(){
+pinMode(0, OUTPUT); pinMode(1, INPUT); pinMode(2,OUTPUT);
+ 
+
+pinMode(3,OUTPUT);
+pinMode(4,OUTPUT);
+pinMode(5, OUTPUT);	//Status led de aguardando comando de voz pinMode(6, OUTPUT);
+pinMode(7, OUTPUT);
+pinMode(8, OUTPUT); //OUTPUT 1 PARA O MOTOR
+pinMode(9, OUTPUT); //OUTPUT 2 PARA O MOTOR
+pinMode(10, OUTPUT); //ATIVA/DESATIVA MOTOR DAS PERNAS pinMode(11, OUTPUT); //ATIVA/DESATIVA MOTOR DO DORSO pinMode(12, INPUT);  //VRbot_receivePin
+pinMode(13, OUTPUT); //VRbot_transmitPin digitalWrite(2, LOW);
+if(analogRead(A0) > 400){ StatusSensorA0 = 1; StatusSensorA1 = 0;
+}
+if(analogRead(A1) > 400){ StatusSensorA1 = 1; StatusSensorA0 = 0;
+}
+if(analogRead(A2) > 400){ StatusSensorA2 = 1; StatusSensorA3 = 0;
+}
+if(analogRead(A3) > 400){ StatusSensorA3 = 1; StatusSensorA2 = 0;
+}
+
+Serial.begin(9600);
+delay(200);
+
+
+
+Serial.println("Software - Cama Hospitalar. Versao: 4.5"); Serial.println("CONFIGURACAO - Modo Normal");
+
+VRbot_baudRate = 9600;
+VRbot_bitPeriod = 1000000 / VRbot_baudRate; VRbot_receivePin = 12;
+
+VRserial.begin(9600); digitalWrite(VRbot_transmitPin, HIGH); delayMicroseconds( VRbot_bitPeriod);
+
+easyvr.playSound(som_inicializandoconfiguracoes, EasyVR::VOL_FULL);
+ 
+
+if (!VRbot_Detect())
+Serial.println("EASYVR DETECTADO - NAO");
+else {
+Serial.println("EASYVR DETECTADO - SIM"); VRbot_SetTimeout(10); VRbot_SetLanguage(0);
+easyvr.playSound(som_configuracoesefetuadas, EasyVR::VOL_FULL);
+}
+
+}
+
+void loop()
+{
+if(StatusCama == 0)
+{
+AtivarCama();
+}
+else if(StatusAjuste == 0)
+{
+VerificaAjuste();
+}
+else if(StatusRegiao == 0)
+{
+VerificaRegiao();
+}
+else
+{
+RealizaAcao();
+}
+}
+
+void AtivarCama()
+{
+int trigger;
+Serial.println("Para ligar a cama diga: ATIVAR CAMA"); VRbot_RecognizeSD(1);
+trigger = VRbot_CheckResult();
+
+if( trigger == -1){
+Serial.println("Timeout de 10 segundos atingido!");
+return;
+}else if( trigger == -2){
+//Serial.println("Comando Invalido!!!");
+//return; AtivarCama();
+}else if( trigger == 0 ){ Serial.println("CAMA ATIVADA"); digitalWrite(2, HIGH);
+ 
+
+easyvr.playSound(som_camaativada, EasyVR::VOL_FULL); StatusCama = 1;
+return;
+}
+}
+
+void VerificaAjuste()
+{
+int Ajuste;
+Serial.println("Para realizar algum ajuste diga: AJUSTAR CAMA"); VRbot_RecognizeSD(2);
+Ajuste = VRbot_CheckResult();
+
+if( Ajuste == -1){
+Serial.println("Timeout de 10 segundos atingido!");
+return;
+}else if( Ajuste == -2){
+//Serial.println("Comando Invalido!!!");
+//return; VerificaAjuste();
+}else if( Ajuste == 0 ){ StatusAjuste = 1; return;
+}else if( Ajuste == 1){
+
+easyvr.playSound(som_camadesativada, EasyVR::VOL_FULL);
+
+StatusCama = 0; StatusAjuste = 0;
+}
+}
+
+void VerificaRegiao()
+{
+int RegiaoRecebida;
+Serial.println("AJUSTAR REGIAO - DORSO OU PERNA || DESLIGAR CAMA");
+
+if(somRegiao==0)
+easyvr.playSound(som_qualregiaoajustar, EasyVR::VOL_FULL);
+
+VRbot_RecognizeSD(3);
+RegiaoRecebida = VRbot_CheckResult();
+
+if( RegiaoRecebida == -1){
+somRegiao = 1;
+Serial.println("Timeout de 10 segundos atingido!");
+return;
+}else if( RegiaoRecebida == -2){
+ 
+
+somRegiao = 1; VerificaRegiao();
+}else if( RegiaoRecebida == 0 ){ Serial.println("REGIAO SELECIONADA - PERNA"); easyvr.playSound(som_pernaselecionada, EasyVR::VOL_FULL); digitalWrite(11, LOW); //DESATIVA MOTOR DORSO digitalWrite(10, HIGH); //ATIVA MOTOR PERNAS
+StatusRegiao = 1; //REGIAO PERNA SELECIONADA
+return;
+}else if( RegiaoRecebida == 1 ){ Serial.println("REGIAO SELECIONADA - DORSO"); easyvr.playSound(som_dorsoselecionado, EasyVR::VOL_FULL); digitalWrite(10, LOW); //DESATIVA MOTOR PERNA digitalWrite(11, HIGH); //ATIVA MOTOR DORSO
+StatusRegiao = 2; //REGIAO DORSO SELECIONADA
+return;
+}
+}
+
+void RealizaAcao()
+{
+int AcaoRecebida;
+Serial.println("ACAO - LEVANTAR , BAIXAR OU PARAR?");
+
+if(somAcao==0){
+delay(600);
+easyvr.playSound(som_qualacaorealizar, EasyVR::VOL_FULL);
+}
+
+VRbot_RecognizeSD(4);
+verificaPeloSensor = 1;
+AcaoRecebida = VRbot_CheckResult();
+
+if( AcaoRecebida == -1){
+somAcao = 1;
+Serial.println("Timeout de 10 segundos atingido!");
+return;
+}else if( AcaoRecebida == -2){
+somAcao = 1; RealizaAcao();
+}else if( AcaoRecebida == 0  && ((StatusSensorA0==0 && StatusRegiao==1) || (StatusSensorA2==0 && StatusRegiao==2)) ){
+somAcao = 1;
+
+digitalWrite(8, LOW);
+digitalWrite(9, LOW);
+
+if(StatusRegiao==1)
+ 
+
+easyvr.playSound(som_pernabaixando, EasyVR::VOL_FULL);
+else
+easyvr.playSound(som_dorsobaixando, EasyVR::VOL_FULL);
+
+Serial.println("LEVANTANTO..."); digitalWrite(8, HIGH); digitalWrite(9, LOW);
+return;
+}else if( (AcaoRecebida == 1 && ((StatusSensorA1==0 && StatusRegiao==1) || (StatusSensorA3==0 && StatusRegiao==2)) ){
+somAcao = 1;
+
+digitalWrite(8, LOW);
+digitalWrite(9, LOW);
+
+if(StatusRegiao==1)
+easyvr.playSound(som_pernalevantando, EasyVR::VOL_FULL);
+else
+easyvr.playSound(som_dorsolevantando, EasyVR::VOL_FULL);
+
+Serial.println("BAIXANDO..."); digitalWrite(8, LOW); digitalWrite(9, HIGH);
+return;
+}else if( AcaoRecebida ==2 AcaoRecebida == -3){
+somRegiao = 0;
+somAcao = 0;
+
+Serial.println("PARADO"); digitalWrite(8, LOW); digitalWrite(9, LOW); digitalWrite(10, LOW); digitalWrite(11, LOW);
+
+StatusAjuste = 0; StatusRegiao = 0;
+
+easyvr.playSound(som_ajustefinalizado, EasyVR::VOL_FULL);
+
+return;
+}
+
+}
+
+boolean VerificaSensor()
+{
+if(analogRead(A0) > 400){
+digitalWrite(6, HIGH);
+ 
+
+}else{
+StatusSensorA0 = 0;
+digitalWrite(6, LOW);
+}
+
+if(analogRead(A1) > 400){
+digitalWrite(7, HIGH);
+}else{
+StatusSensorA1 = 0;
+digitalWrite(7, LOW);
+}
+
+if(analogRead(A2) > 400){
+digitalWrite(7, HIGH);
+}else{
+StatusSensorA2 = 0;
+digitalWrite(7, LOW);
+}
+
+if(analogRead(A3) > 400){
+digitalWrite(7, HIGH);
+}else{
+StatusSensorA3 = 0;
+digitalWrite(7, LOW);
+}
+
+
+
+if (StatusSensorA0 == 0){
+if (analogRead(A0) > 400 && verificaPeloSensor == 1){
+verificaPeloSensor = 0; StatusSensorA0 = 1;
+Serial.println("CAMA PAROU PELO SENSOR 0");
+return true;
+}
+}
+
+if(StatusSensorA1 == 0){
+if (analogRead(A1) > 400 && verificaPeloSensor == 1){
+verificaPeloSensor = 0; StatusSensorA1 = 1;
+Serial.println("CAMA PAROU PELO SENSOR 1");
+return true;
+}
+}
+
+if(StatusSensorA2 == 0){
+if (analogRead(A2) > 400 && verificaPeloSensor == 1){
+verificaPeloSensor = 0;
+ 
+
+StatusSensorA2 = 1;
+Serial.println("CAMA PAROU PELO SENSOR 2");
+return true;
+}
+}
+
+if(StatusSensorA3 == 0){
+if (analogRead(A3) > 400 && verificaPeloSensor == 1){
+verificaPeloSensor = 0; StatusSensorA3 = 1;
+Serial.println("CAMA PAROU PELO SENSOR 3");
+return true;
+}
+}
+
+return false;
+}
+
+/*******************************************************************************/
+
+unsigned char VRbot_read(void)
+{
+while(1){ if(VRserial.available()) { return VRserial.read();
+}else if(VerificaSensor()){
+return STS_SENSOR;
+}
+}
+}
+
+void VRbot_write(int val)
+{
+VRserial.write(val);
+}
+
+/*******************************************************************************/
+
+unsigned char VRbot_Detect(void) {
+unsigned char i;
+for (i = 0; i < 5; ++i) { delay(100); VRbot_write(CMD_BREAK);
+if ( VRbot_read() == STS_SUCCESS)
+return 255;
+}
+return 0;
+}
+ 
+
+
+
+unsigned char VRbot_SetLanguage(unsigned char lang) {
+
+VRbot_write(CMD_LANGUAGE); delay(5); VRbot_write(ARG_ZERO + lang);
+
+if (VRbot_read() == STS_SUCCESS)
+return 255;
+return 0;
+}
+
+void VRbot_RecognizeSD(unsigned char group) { VRbot_write(CMD_RECOG_SD);
+delay(5);
+VRbot_write(ARG_ZERO + group);
+}
+
+void VRbot_RecognizeSI(unsigned char ws) { VRbot_write(CMD_RECOG_SI);
+delay(5); VRbot_write(ARG_ZERO + ws);
+}
+
+void VRbot_SetTimeout(unsigned char s) { VRbot_write(CMD_TIMEOUT);
+delay(5); VRbot_write(ARG_ZERO + s); delay(5);
+}
+
+signed char VRbot_CheckResult(void) {
+
+unsigned char rx;
+rx = VRbot_read();
+if (rx == STS_SIMILAR || rx == STS_RESULT) {
+delay(5); VRbot_write(ARG_ACK);
+return (VRbot_read() - ARG_ZERO);
+}
+if (rx == STS_TIMEOUT)
+return -1;
+
+if (rx == STS_SENSOR)
+return -3;
+
+return -2;
+}
